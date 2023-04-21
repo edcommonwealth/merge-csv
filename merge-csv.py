@@ -124,7 +124,7 @@ def repair_student_rows(df):
 def combine_variants(df):
     drops = []
     for col in df:
-        x = re.search(r's-[a-z]{4}-q[0-9]-1', col)
+        x = re.search(r's-[a-z]{4}-q[0-9][0-9]?-1', col)
         if x is not None:
             # get non variant version
             nonvar = col[:-2]
