@@ -1,6 +1,7 @@
 .env
 .idea
-test-csv/merged
+test-csv
 ecp-csv
 test-csv-large
 merged
+bfg.jar
