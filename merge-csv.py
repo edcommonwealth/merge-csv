@@ -103,50 +103,43 @@ def prep_dir(folder=''):
     mwd = os.path.join(cwd, 'merged')
     if not os.path.exists(mwd):
         os.mkdir(mwd)
+    if args.verbose: print('Source data directory: ' + cwd)
+    if args.verbose: print('Merged data directory: ' + mwd)
     return cwd, mwd
 
 
 def get_date():
     return datetime.date.today().strftime("%B-%d-%Y")
 
+# UNUSED
+# def cap_permutations(s):
+#     if len(s) > 15:
+#         return [s]
+#     lu_sequence = ((c.lower(), c.upper()) for c in s)
+#     return [''.join(x) for x in it.product(*lu_sequence)]
 
-def cap_permutations(s):
-    if len(s) > 15:
-        return [s]
-    lu_sequence = ((c.lower(), c.upper()) for c in s)
-    return [''.join(x) for x in it.product(*lu_sequence)]
 
-
-def combine_rows(df, col, possibilities):
+def combine_cols(df, col, possibilities):
     # if final column doesn't exist, create it
     if col not in df.columns:
         tmpdf = pd.DataFrame([np.nan], columns=[col])
         df = pd.concat((df, tmpdf), axis=1)
-    # generate all upper/lowercase possibilities for columns
-    allp = []
-    for p in possibilities:
-        allp += cap_permutations(p)
-    # also have to remove the final column from the possibilities
-    safety = 0
-    while col in allp:
-        allp.remove(col)
-        safety += 1
-        if safety > 100:
-            print(f'Fatal: Infinite loop detected, shutting down.')
-            exit(1)
     # list to store replaced columns
     drops = []
     # for every column possibility that does exist...
-    for c in allp:
-        if c in df.columns:
+    for cl in df.columns:
+        if cl.lower() in possibilities:
+            # we don't want to merge and drop our final column
+            if cl == col:
+                continue
             # replace the column...
-            # print(f'Replacing column {c}')
-            df[col] = df[col].replace(r'^\s*$', np.nan, regex=True).fillna(df[c])
+            if args.verbose: print(f'Replacing column {cl}')
+            df[col] = df[col].replace(r'^\s*$', np.nan, regex=True).fillna(df[cl])
             # and add it to the drop list
-            drops.append(c)
+            drops.append(cl)
     # drop spent columns
     df = df.drop(columns=drops)
-    # print(f'Dropped columns: {drops}')
+    if args.verbose: print(f'Dropped columns: {drops}')
     return df
 
 
@@ -209,19 +202,19 @@ def do_merge_teacher(cwd, mwd):
 
 
 def repair_teacher_rows(df):
-    df = combine_rows(df, 'Recorded Date', ['recorded date', 'recordeddate'])
-    df = combine_rows(df, 'Response ID', ['Responseid', 'Response id'])
-    df = combine_rows(df, 'DeseId', ['deseid', 'dese id', 'school'])
+    df = combine_cols(df, 'Recorded Date', ['recorded date', 'recordeddate'])
+    df = combine_cols(df, 'Response ID', ['responseid', 'response id'])
+    df = combine_cols(df, 'DeseId', ['deseid', 'dese id', 'school'])
     return df
 
 
 def repair_student_rows(df):
-    df = combine_rows(df, 'Recorded Date', ['recorded date', 'recordeddate'])
-    df = combine_rows(df, 'Response ID', ['Responseid', 'Response id'])
-    df = combine_rows(df, 'DeseId', ['deseid', 'dese id', 'school'])
-    df = combine_rows(df, 'Grade', ['grade', 'What grade are you in?'])
-    df = combine_rows(df, 'Gender', ['gender', 'Gender - self report', 'What is your gender?', 'What is your gender? - Selected Choice'])
-    df = combine_rows(df, 'Race', ['Race- self report', 'race', 'Race - self report'])
+    df = combine_cols(df, 'Recorded Date', ['recorded date', 'recordeddate'])
+    df = combine_cols(df, 'Response ID', ['responseid', 'response id'])
+    df = combine_cols(df, 'DeseId', ['deseid', 'dese id', 'school'])
+    df = combine_cols(df, 'Grade', ['grade', 'what grade are you in?'])
+    df = combine_cols(df, 'Gender', ['gender', 'what is your gender?', 'what is your gender? - selected choice'])
+    df = combine_cols(df, 'Race', ['race'])
     if not args.quiet: print('Combining Question Variants...')
     df = combine_variants(df)
     return df
@@ -264,6 +257,10 @@ if __name__ == '__main__':
                         action='store_true',
                         dest='quiet',
                         help='run without output (besides errors and warnings)')
+    parser.add_argument('-v', '--verbose',
+                        action='store_true',
+                        dest='verbose',
+                        help='run with extra output information')
     parser.add_argument('-p', '--project',
                         action='store',
                         help='add a project name to the merged csv file name')
@@ -272,6 +269,10 @@ if __name__ == '__main__':
                         dest='remote_url',
                         help='sftp url for remote merging')
     args = parser.parse_args()
+
+    #quiet takes precedence over verbose
+    if args.quiet:
+        args.verbose = False
 
     # make sure -s or -t is set
     if not (args.student or args.teacher):
