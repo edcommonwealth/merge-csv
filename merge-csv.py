@@ -143,6 +143,26 @@ def combine_cols(df, col, possibilities):
     return df
 
 
+def clean_cols(df):
+    remove = [
+        'Please select the month, day and year of your birthday. - Month'.lower(),
+        'Please select the month, day and year of your birthday. - Day'.lower(),
+        'Please select the month, day and year of your birthday. - Year'.lower(),
+        'Gender - SIS'.lower(),
+        'Race - SIS'.lower(),
+        'Finished'.lower(),
+        'STDev'.lower(),
+    ]
+    drops = []
+    for col in df.columns:
+        if col.lower() in remove:
+            drops.append(col)
+    df = df.drop(columns=drops)
+    if args.verbose: print(f'Dropped columns: {drops}')
+    return df
+
+
+
 def do_merge_student(cwd, mwd):
     # identify and merge student files
     if not args.quiet: print('---Merging Student Data---')
@@ -159,6 +179,8 @@ def do_merge_student(cwd, mwd):
     df = pd.concat(files, axis=0)
     if not args.quiet: print('Repairing rows...')
     df = repair_student_rows(df)
+    if not args.quiet: print('Cleaning out columns...')
+    df = clean_cols(df)
     if df.shape[0] != lines:
         print(f'Warning: Line count mismatch: {lines} expected, but got {df.shape[0]}')
     date = get_date()
@@ -188,6 +210,8 @@ def do_merge_teacher(cwd, mwd):
     df = pd.concat(files, axis=0)
     if not args.quiet: print('Repairing rows...')
     df = repair_teacher_rows(df)
+    if not args.quiet: print('Cleaning out columns...')
+    df = clean_cols(df)
     if df.shape[0] != lines:
         print(f'Warning: Line count mismatch: {lines} expected, but got {df.shape[0]}')
     date = get_date()
