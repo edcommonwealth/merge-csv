@@ -144,18 +144,27 @@ def combine_cols(df, col, possibilities):
 
 
 def clean_cols(df):
-    remove = [
-        'Please select the month, day and year of your birthday. - Month'.lower(),
-        'Please select the month, day and year of your birthday. - Day'.lower(),
-        'Please select the month, day and year of your birthday. - Year'.lower(),
-        'Gender - SIS'.lower(),
-        'Race - SIS'.lower(),
-        'Finished'.lower(),
-        'STDev'.lower(),
+    keep = [
+        'StartDate',
+        'EndDate',
+        'Status',
+        'IPAddress',
+        'Progress',
+        'Finished',
+        'District',
+        'LASID',
+        'Grade',
+        'Gender',
+        'Race',
+        'Response ID',
+        'Response Id',
+        'DeseId',
+        'Dese Id',
     ]
+    keep = list(map(str.lower, keep))
     drops = []
     for col in df.columns:
-        if col.lower() in remove:
+        if col.lower() not in keep and not col.startswith('s-') and not col.startswith('t-'):
             drops.append(col)
     df = df.drop(columns=drops)
     if args.verbose: print(f'Dropped columns: {drops}')
