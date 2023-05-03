@@ -147,24 +147,36 @@ def clean_cols(df):
     keep = [
         'StartDate',
         'EndDate',
+        'Start Date',
+        'End Date',
         'Status',
-        'IPAddress',
+        'Response Type',
+        'IpAddress',
+        'Ip Address'
         'Progress',
+        'Duration',
+        'Please enter your Locally Assigned Student ID Number (LASID, or student lunch number).',
         'Finished',
         'District',
         'LASID',
+        'Recorded Date',
+        'RecordedDate',
         'Grade',
         'Gender',
         'Race',
-        'Response ID',
         'Response Id',
+        'ResponseId',
         'DeseId',
         'Dese Id',
+        'School',
+        'District',
+        'Please select your school district.',
     ]
     keep = list(map(str.lower, keep))
     drops = []
+    question_pattern = re.compile("^[s,t]-[a-zA-Z]{4}-q[0-9][0-9]?$")
     for col in df.columns:
-        if col.lower() not in keep and not col.startswith('s-') and not col.startswith('t-'):
+        if col.lower() not in keep and not bool(question_pattern.match(col)):
             drops.append(col)
     df = df.drop(columns=drops)
     if args.verbose: print(f'Dropped columns: {drops}')
@@ -183,8 +195,8 @@ def do_merge_student(cwd, mwd):
     if not args.quiet: print('Merging...')
     files = [pd.read_csv(f, low_memory=False) for f in all_files]
     lines = 0
-    for f in files:
-        lines += f.shape[0]
+    for fi in files:
+        lines += fi.shape[0]
     df = pd.concat(files, axis=0)
     if not args.quiet: print('Repairing rows...')
     df = repair_student_rows(df)
