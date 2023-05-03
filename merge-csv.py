@@ -210,7 +210,7 @@ def do_merge_student(cwd, mwd):
     else:
         proj = ''
     fn = f'{date}{proj}-student-data-merged.csv'
-    df.to_csv(os.path.join(mwd, fn))
+    df.to_csv(os.path.join(mwd, fn), index=False)
     if not args.quiet: print('Student data merged successfully!')
     return fn
 
@@ -241,7 +241,7 @@ def do_merge_teacher(cwd, mwd):
     else:
         proj = ''
     fn = f'{date}{proj}-teacher-data-merged.csv'
-    df.to_csv(os.path.join(mwd, fn))
+    df.to_csv(os.path.join(mwd, fn), index=False)
     if not args.quiet: print('Teacher data merged successfully!')
     return fn
 
