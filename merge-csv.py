@@ -9,6 +9,38 @@ import re
 from urllib.parse import urlparse
 import pysftp
 
+# TODO make sure these are not case sensitive
+# all of the columns we want to extract from the csv file
+# excluding the question ids (they are found using regex)
+final_columns_student = {
+    'Start Date': ['startdate', 'start date'],
+    'End Date': ['enddate', 'end date'],
+    'Status': ['status'],
+    'Ip Address': ['ip address', 'ipaddress'],
+    'Progress': ['progress'],
+    'Duration': ['duration', 'duration..in.seconds', 'duration (in seconds)'],
+    'District': ['district', 'please select your school district.'],
+    'LASID': ['lasid', 'Please enter your Locally Assigned Student ID Number (LASID, or student lunch number).'],
+    'Grade': ['grade', 'what grade are you in?'],
+    'Gender': ['gender', 'what is your gender?', 'what is your gender? - selected choice'],
+    'Race': ['race'],
+    'Recorded Date': ['recorded date', 'recordeddate'],
+    'Response Id': ['responseid', 'response id'],
+    'Dese Id': ['deseid', 'dese id', 'school'],
+}
+
+final_columns_teacher = {
+    'Start Date': ['startdate', 'start date'],
+    'End Date': ['enddate', 'end date'],
+    'Status': ['status'],
+    'Ip Address': ['ip address', 'ipaddress'],
+    'Progress': ['progress'],
+    'Duration': ['duration', 'duration..in.seconds', 'duration (in seconds)'],
+    'District': ['district', 'please select your school district.'],
+    'Recorded Date': ['recorded date', 'recordeddate'],
+    'Response Id': ['responseid', 'response id'],
+    'Dese Id': ['deseid', 'dese id', 'school'],
+}
 
 class Sftp:
     def __init__(self, hostname, username, password, cnopts, port=22):
@@ -97,28 +129,25 @@ class Sftp:
             raise Exception(err)
 
 
+# prepare csv and merged csv directories
 def prep_dir(folder=''):
     # prepare directories
     cwd = os.path.join(os.getcwd(), folder)
     mwd = os.path.join(cwd, 'merged')
     if not os.path.exists(mwd):
+        if args.verbose: print(f'Creating directory {mwd}')
         os.mkdir(mwd)
     if args.verbose: print('Source data directory: ' + cwd)
     if args.verbose: print('Merged data directory: ' + mwd)
     return cwd, mwd
 
 
+# get current date in Month-XX-YYYY format
 def get_date():
     return datetime.date.today().strftime("%B-%d-%Y")
 
-# UNUSED
-# def cap_permutations(s):
-#     if len(s) > 15:
-#         return [s]
-#     lu_sequence = ((c.lower(), c.upper()) for c in s)
-#     return [''.join(x) for x in it.product(*lu_sequence)]
 
-
+# in dataframe df, merges any column in possibilities into the final column col
 def combine_cols(df, col, possibilities):
     # if final column doesn't exist, create it
     if col not in df.columns:
@@ -143,38 +172,12 @@ def combine_cols(df, col, possibilities):
     return df
 
 
-def clean_cols(df):
-    keep = [
-        'StartDate',
-        'EndDate',
-        'Start Date',
-        'End Date',
-        'Status',
-        'Response Type',
-        'IpAddress',
-        'Ip Address'
-        'Progress',
-        'Duration',
-        'Please enter your Locally Assigned Student ID Number (LASID, or student lunch number).',
-        'Finished',
-        'District',
-        'LASID',
-        'Recorded Date',
-        'RecordedDate',
-        'Grade',
-        'Gender',
-        'Race',
-        'Response Id',
-        'ResponseId',
-        'DeseId',
-        'Dese Id',
-        'School',
-        'District',
-        'Please select your school district.',
-    ]
+# removes unused columns from student data
+def clean_cols_student(df):
+    keep = list(final_columns_student.keys())
     keep = list(map(str.lower, keep))
     drops = []
-    question_pattern = re.compile("^[s,t]-[a-zA-Z]{4}-q[0-9][0-9]?$")
+    question_pattern = re.compile("^s-[a-zA-Z]{4}-q[0-9][0-9]?$")
     for col in df.columns:
         if col.lower() not in keep and not bool(question_pattern.match(col)):
             drops.append(col)
@@ -183,7 +186,21 @@ def clean_cols(df):
     return df
 
 
+# removes unused columns from teacher data
+def clean_cols_teacher(df):
+    keep = list(final_columns_teacher.keys())
+    keep = list(map(str.lower, keep))
+    drops = []
+    question_pattern = re.compile("^t-[a-zA-Z]{4}-q[0-9][0-9]?$")
+    for col in df.columns:
+        if col.lower() not in keep and not bool(question_pattern.match(col)):
+            drops.append(col)
+    df = df.drop(columns=drops)
+    if args.verbose: print(f'Dropped columns: {drops}')
+    return df
 
+
+# performs all merging operations for student data
 def do_merge_student(cwd, mwd):
     # identify and merge student files
     if not args.quiet: print('---Merging Student Data---')
@@ -194,16 +211,22 @@ def do_merge_student(cwd, mwd):
         return
     if not args.quiet: print('Merging...')
     files = [pd.read_csv(f, low_memory=False) for f in all_files]
+    # count lines in read csv files
     lines = 0
     for fi in files:
         lines += fi.shape[0]
+    # combine csv files
     df = pd.concat(files, axis=0)
+    # combine related columns
     if not args.quiet: print('Repairing rows...')
-    df = repair_student_rows(df)
+    df = repair_student_columns(df)
+    # clean out unnecessary columns
     if not args.quiet: print('Cleaning out columns...')
-    df = clean_cols(df)
+    df = clean_cols_student(df)
+    # ensure line count matches what is expected
     if df.shape[0] != lines:
         print(f'Warning: Line count mismatch: {lines} expected, but got {df.shape[0]}')
+    # save merged file
     date = get_date()
     if args.project:
         proj = '-' + args.project
@@ -215,6 +238,7 @@ def do_merge_student(cwd, mwd):
     return fn
 
 
+# performs all merging operations for teacher data
 def do_merge_teacher(cwd, mwd):
     # identify and merge teacher files
     if not args.quiet: print('---Merging Teacher Data---')
@@ -225,16 +249,22 @@ def do_merge_teacher(cwd, mwd):
         return
     if not args.quiet: print('Merging...')
     files = [pd.read_csv(f, low_memory=False) for f in all_files]
+    # count lines in read csv files
     lines = 0
     for f in files:
         lines += f.shape[0]
+    # combine csv files
     df = pd.concat(files, axis=0)
-    if not args.quiet: print('Repairing rows...')
-    df = repair_teacher_rows(df)
+    # combine related columns
+    if not args.quiet: print('Repairing columns...')
+    df = repair_teacher_columns(df)
+    # clean out unnecessary columns
     if not args.quiet: print('Cleaning out columns...')
-    df = clean_cols(df)
+    df = clean_cols_teacher(df)
+    # ensure line count matches what is expected
     if df.shape[0] != lines:
         print(f'Warning: Line count mismatch: {lines} expected, but got {df.shape[0]}')
+    # save merged file
     date = get_date()
     if args.project:
         proj = '-' + args.project
@@ -246,29 +276,28 @@ def do_merge_teacher(cwd, mwd):
     return fn
 
 
-def repair_teacher_rows(df):
-    df = combine_cols(df, 'Recorded Date', ['recorded date', 'recordeddate'])
-    df = combine_cols(df, 'Response ID', ['responseid', 'response id'])
-    df = combine_cols(df, 'DeseId', ['deseid', 'dese id', 'school'])
+# merges teacher columns that may have mismatched names
+def repair_teacher_columns(df):
+    for col in final_columns_teacher:
+        df = combine_cols(df, col, final_columns_teacher[col])
     return df
 
 
-def repair_student_rows(df):
-    df = combine_cols(df, 'Recorded Date', ['recorded date', 'recordeddate'])
-    df = combine_cols(df, 'Response ID', ['responseid', 'response id'])
-    df = combine_cols(df, 'DeseId', ['deseid', 'dese id', 'school'])
-    df = combine_cols(df, 'Grade', ['grade', 'what grade are you in?'])
-    df = combine_cols(df, 'Gender', ['gender', 'what is your gender?', 'what is your gender? - selected choice'])
-    df = combine_cols(df, 'Race', ['race'])
+# merges student columns that may have mismatched names, 
+# and combines question variants
+def repair_student_columns(df):
+    for col in final_columns_student:
+        df = combine_cols(df, col, final_columns_student[col])
     if not args.quiet: print('Combining Question Variants...')
     df = combine_variants(df)
     return df
 
 
+# combines question variants into non-variant columns
 def combine_variants(df):
     drops = []
     for col in df:
-        x = re.search(r's-[a-z]{4}-q[0-9][0-9]?-1', col)
+        x = re.search(r'^s-[a-z]{4}-q[0-9][0-9]?-1$', col)
         if x is not None:
             # get non variant version
             nonvar = col[:-2]

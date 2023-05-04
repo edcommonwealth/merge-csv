@@ -1,6 +1,6 @@
 .env
 .idea
-test-csv
+test-*
 ecp-csv
 test-csv-large
 merged
