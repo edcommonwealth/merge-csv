@@ -5,3 +5,5 @@ ecp-csv
 test-csv-large
 merged
 bfg.jar
+*.sh
+__pycache__

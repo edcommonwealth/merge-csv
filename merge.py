@@ -9,7 +9,8 @@ import re
 from urllib.parse import urlparse
 import pysftp
 
-# TODO make sure these are not case sensitive
+#NOTE for now, each of the arrays should be all lowercase
+#TODO eventually make them case agnostic
 # all of the columns we want to extract from the csv file
 # excluding the question ids (they are found using regex)
 final_columns_student = {
@@ -20,7 +21,7 @@ final_columns_student = {
     'Progress': ['progress'],
     'Duration': ['duration', 'duration..in.seconds', 'duration (in seconds)'],
     'District': ['district', 'please select your school district.'],
-    'LASID': ['lasid', 'Please enter your Locally Assigned Student ID Number (LASID, or student lunch number).'],
+    'LASID': ['lasid', 'please enter your locally assigned student id number (lasid, or student lunch number).'],
     'Grade': ['grade', 'what grade are you in?'],
     'Gender': ['gender', 'what is your gender?', 'what is your gender? - selected choice'],
     'Race': ['race'],
@@ -41,6 +42,10 @@ final_columns_teacher = {
     'Response Id': ['responseid', 'response id'],
     'Dese Id': ['deseid', 'dese id', 'school'],
 }
+
+argVerbose = False
+argQuiet = True
+
 
 class Sftp:
     def __init__(self, hostname, username, password, cnopts, port=22):
@@ -68,12 +73,12 @@ class Sftp:
         except Exception as err:
             raise Exception(err)
         finally:
-            if not args.quiet: print(f"Connected to {self.hostname} as {self.username}.")
+            if not argQuiet: print(f"Connected to {self.hostname} as {self.username}.")
 
     def disconnect(self):
         """Closes the sftp connection"""
         self.connection.close()
-        if not args.quiet: print(f"Disconnected from host {self.hostname}")
+        if not argQuiet: print(f"Disconnected from host {self.hostname}")
 
     def listdir(self, remote_path):
         """lists all the files and directories in the specified path and returns them"""
@@ -92,7 +97,7 @@ class Sftp:
         """
 
         try:
-            if not args.quiet: print(
+            if not argQuiet: print(
                 f"downloading from {self.hostname} as {self.username} [(remote path : {remote_path});(local path: {target_local_path})]"
             )
 
@@ -106,7 +111,7 @@ class Sftp:
 
             # Download from remote sftp server to local
             self.connection.get(remote_path, target_local_path)
-            if not args.quiet: print("download completed")
+            if not argQuiet: print("download completed")
 
         except Exception as err:
             raise Exception(err)
@@ -117,13 +122,13 @@ class Sftp:
         """
 
         try:
-            if not args.quiet: print(
+            if not argQuiet: print(
                 f"uploading to {self.hostname} as {self.username} [(remote path: {remote_path});(source local path: {source_local_path})]"
             )
 
             # Download file from SFTP
             self.connection.put(source_local_path, remote_path)
-            if not args.quiet: print("upload completed")
+            if not argQuiet: print("upload completed")
 
         except Exception as err:
             raise Exception(err)
@@ -135,10 +140,10 @@ def prep_dir(folder=''):
     cwd = os.path.join(os.getcwd(), folder)
     mwd = os.path.join(cwd, 'merged')
     if not os.path.exists(mwd):
-        if args.verbose: print(f'Creating directory {mwd}')
+        if argVerbose: print(f'Creating directory {mwd}')
         os.mkdir(mwd)
-    if args.verbose: print('Source data directory: ' + cwd)
-    if args.verbose: print('Merged data directory: ' + mwd)
+    if argVerbose: print('Source data directory: ' + cwd)
+    if argVerbose: print('Merged data directory: ' + mwd)
     return cwd, mwd
 
 
@@ -162,13 +167,13 @@ def combine_cols(df, col, possibilities):
             if cl == col:
                 continue
             # replace the column...
-            if args.verbose: print(f'Replacing column {cl}')
+            if argVerbose: print(f'Replacing column {cl}')
             df[col] = df[col].replace(r'^\s*$', np.nan, regex=True).fillna(df[cl])
             # and add it to the drop list
             drops.append(cl)
     # drop spent columns
     df = df.drop(columns=drops)
-    if args.verbose: print(f'Dropped columns: {drops}')
+    if argVerbose: print(f'Dropped columns: {drops}')
     return df
 
 
@@ -182,7 +187,7 @@ def clean_cols_student(df):
         if col.lower() not in keep and not bool(question_pattern.match(col)):
             drops.append(col)
     df = df.drop(columns=drops)
-    if args.verbose: print(f'Dropped columns: {drops}')
+    if argVerbose: print(f'Dropped columns: {drops}')
     return df
 
 
@@ -196,20 +201,20 @@ def clean_cols_teacher(df):
         if col.lower() not in keep and not bool(question_pattern.match(col)):
             drops.append(col)
     df = df.drop(columns=drops)
-    if args.verbose: print(f'Dropped columns: {drops}')
+    if argVerbose: print(f'Dropped columns: {drops}')
     return df
 
 
 # performs all merging operations for student data
 def do_merge_student(cwd, mwd):
     # identify and merge student files
-    if not args.quiet: print('---Merging Student Data---')
+    if not argQuiet: print('---Merging Student Data---')
     all_files = glob.glob(os.path.join(cwd, "*student*.csv"))
-    if not args.quiet: print(f'Found {len(all_files)} Student CSV files')
+    if not argQuiet: print(f'Found {len(all_files)} Student CSV files')
     if len(all_files) < 1:
-        if not args.quiet: print('No files found. Skipping merge...')
+        if not argQuiet: print('No files found. Skipping merge...')
         return
-    if not args.quiet: print('Merging...')
+    if not argQuiet: print('Merging...')
     files = [pd.read_csv(f, low_memory=False) for f in all_files]
     # count lines in read csv files
     lines = 0
@@ -218,10 +223,10 @@ def do_merge_student(cwd, mwd):
     # combine csv files
     df = pd.concat(files, axis=0)
     # combine related columns
-    if not args.quiet: print('Repairing rows...')
+    if not argQuiet: print('Repairing rows...')
     df = repair_student_columns(df)
     # clean out unnecessary columns
-    if not args.quiet: print('Cleaning out columns...')
+    if not argQuiet: print('Cleaning out columns...')
     df = clean_cols_student(df)
     # ensure line count matches what is expected
     if df.shape[0] != lines:
@@ -234,20 +239,20 @@ def do_merge_student(cwd, mwd):
         proj = ''
     fn = f'{date}{proj}-student-data-merged.csv'
     df.to_csv(os.path.join(mwd, fn), index=False)
-    if not args.quiet: print('Student data merged successfully!')
+    if not argQuiet: print('Student data merged successfully!')
     return fn
 
 
 # performs all merging operations for teacher data
 def do_merge_teacher(cwd, mwd):
     # identify and merge teacher files
-    if not args.quiet: print('---Merging Teacher Data---')
+    if not argQuiet: print('---Merging Teacher Data---')
     all_files = glob.glob(os.path.join(cwd, "*teacher*.csv"))
-    if not args.quiet: print(f'Found {len(all_files)} Teacher CSV files')
+    if not argQuiet: print(f'Found {len(all_files)} Teacher CSV files')
     if len(all_files) < 1:
-        if not args.quiet: print('No files found. Skipping merge...')
+        if not argQuiet: print('No files found. Skipping merge...')
         return
-    if not args.quiet: print('Merging...')
+    if not argQuiet: print('Merging...')
     files = [pd.read_csv(f, low_memory=False) for f in all_files]
     # count lines in read csv files
     lines = 0
@@ -256,10 +261,10 @@ def do_merge_teacher(cwd, mwd):
     # combine csv files
     df = pd.concat(files, axis=0)
     # combine related columns
-    if not args.quiet: print('Repairing columns...')
+    if not argQuiet: print('Repairing columns...')
     df = repair_teacher_columns(df)
     # clean out unnecessary columns
-    if not args.quiet: print('Cleaning out columns...')
+    if not argQuiet: print('Cleaning out columns...')
     df = clean_cols_teacher(df)
     # ensure line count matches what is expected
     if df.shape[0] != lines:
@@ -272,7 +277,7 @@ def do_merge_teacher(cwd, mwd):
         proj = ''
     fn = f'{date}{proj}-teacher-data-merged.csv'
     df.to_csv(os.path.join(mwd, fn), index=False)
-    if not args.quiet: print('Teacher data merged successfully!')
+    if not argQuiet: print('Teacher data merged successfully!')
     return fn
 
 
@@ -288,7 +293,7 @@ def repair_teacher_columns(df):
 def repair_student_columns(df):
     for col in final_columns_student:
         df = combine_cols(df, col, final_columns_student[col])
-    if not args.quiet: print('Combining Question Variants...')
+    if not argQuiet: print('Combining Question Variants...')
     df = combine_variants(df)
     return df
 
@@ -307,6 +312,7 @@ def combine_variants(df):
             drops.append(col)
     df = df.drop(columns=drops)
     return df
+
 
 
 if __name__ == '__main__':
@@ -344,23 +350,26 @@ if __name__ == '__main__':
                         help='sftp url for remote merging')
     args = parser.parse_args()
 
+    argVerbose = args.verbose
+    argQuiet = args.quiet
+
     #quiet takes precedence over verbose
-    if args.quiet:
-        args.verbose = False
+    if argQuiet:
+        argVerbose = False
 
     # make sure -s or -t is set
     if not (args.student or args.teacher):
-        if not args.quiet: print('Notice: Neither -s nor -t are specified. No merge will be performed.')
+        if not argQuiet: print('Notice: Neither -s nor -t are specified. No merge will be performed.')
 
     if args.directory and not args.remote_url:
         c, m = prep_dir(args.directory)
     elif not args.directory:
-        if not args.quiet: print('Notice: No directory specified. Defaulting to current directory.')
+        if not argQuiet: print('Notice: No directory specified. Defaulting to current directory.')
         c, m = prep_dir()
 
     # prepare sftp if flagged
     if args.remote_url:
-        if not args.quiet: print(f'Remote destination set, fetching files...')
+        if not argQuiet: print(f'Remote destination set, fetching files...')
         parsed_url = urlparse(args.remote_url)
         cnopts = pysftp.CnOpts()
         cnopts.hostkeys = None
@@ -386,7 +395,7 @@ if __name__ == '__main__':
         for file in sftp.listdir_attr(path):
             if file.filename.endswith(".csv"):
                 filelist.append(file.filename)
-                if not args.quiet: print(f'Fetching file {file.filename}...')
+                if not argQuiet: print(f'Fetching file {file.filename}...')
                 sftp.download(path + file.filename, c + file.filename)
 
     # perform merges
@@ -397,11 +406,11 @@ if __name__ == '__main__':
 
     if args.remote_url:
         # upload tmd and smd to remote
-        if not args.quiet: print('Uploading merged data...')
+        if not argQuiet: print('Uploading merged data...')
         sftp.upload(m + '/' + tmd, path + 'merged/' + tmd)
         sftp.upload(m + '/' + smd, path + 'merged/' + smd)
         # remove merged directory
-        if not args.quiet: print('Cleaning up...')
+        if not argQuiet: print('Cleaning up...')
         os.remove(m + '/' + tmd)
         os.remove(m + '/' + smd)
         os.rmdir(m)
@@ -410,4 +419,4 @@ if __name__ == '__main__':
             if os.path.exists(f):
                 os.remove(f)
         sftp.disconnect()
-    if not args.quiet: print('Done!')
+    if not argQuiet: print('Done!')
