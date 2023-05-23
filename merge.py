@@ -7,6 +7,8 @@ import itertools as it
 import argparse
 import re
 from urllib.parse import urlparse
+from dateutil.parser import parse
+from dateutil.relativedelta import relativedelta
 import pysftp
 
 #NOTE for now, each of the arrays should be all lowercase
@@ -228,6 +230,9 @@ def do_merge_student(cwd, mwd):
     # clean out unnecessary columns
     if not argQuiet: print('Cleaning out columns...')
     df = clean_cols_student(df)
+    # add academic year column
+    if not argQuiet: print('Adding \'Academic Year\' column...')
+    df = add_academic_year(df)
     # ensure line count matches what is expected
     if df.shape[0] != lines:
         print(f'Warning: Line count mismatch: {lines} expected, but got {df.shape[0]}')
@@ -266,6 +271,9 @@ def do_merge_teacher(cwd, mwd):
     # clean out unnecessary columns
     if not argQuiet: print('Cleaning out columns...')
     df = clean_cols_teacher(df)
+    # add academic year column
+    if not argQuiet: print('Adding \'Academic Year\' column...')
+    df = add_academic_year(df)
     # ensure line count matches what is expected
     if df.shape[0] != lines:
         print(f'Warning: Line count mismatch: {lines} expected, but got {df.shape[0]}')
@@ -313,6 +321,35 @@ def combine_variants(df):
     df = df.drop(columns=drops)
     return df
 
+# take the dates in 'Recorded Date' and use them to add
+# a column for academic year
+# note: must be used after the columns are merged because this only
+# looks for the column 'Recorded Date'
+def add_academic_year(df):
+    academic_year = []
+    recorded_date = df['Recorded Date'].tolist()
+    for datestr in recorded_date:
+        academic_year.append(date_str_to_academic_year(datestr))
+    df['Academic Year'] = academic_year
+    # probably unnecessary to return df here, but this is the convention so far
+    return df
+
+
+def date_str_to_academic_year(str):
+    # get date from string
+    try:
+        date = parse(str).date()
+    except TypeError:
+        # I would like this to only print once if the merged csv will have Undefined, but whatever
+        print('WARN: Found non-date value in \'Recorded Date\' column, \'Academic Year\' will contain \'Undefined\' for some rows')
+        return 'Undefined'
+    # I wanted to use dates to calculate the nextyear and lastyear values, but LEAP YEARS !!!!
+    if date.month < 7: # spring semester
+        lastyear = date.year-1
+        return f'{lastyear}-{date.strftime("%y")}'
+    else: # fall semester
+        nextyear = date.year+1 - 2000
+        return f'{date.year}-{nextyear}'
 
 
 if __name__ == '__main__':

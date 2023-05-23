@@ -218,6 +218,36 @@ class TestMergeCSV(unittest.TestCase):
         })
         td = merge.repair_teacher_columns(td)
         self.assertTrue(td.equals(expected), td)
+
+    def test_date_str_to_academic_year(self):
+        # test for spring semester 
+        datestr = "3/16/2023 13:23"
+        academic_year = merge.date_str_to_academic_year(datestr)
+        self.assertEqual(academic_year, '2022-23')
+        # test for fall semester
+        datestr = "9/16/2021 13:23"
+        academic_year = merge.date_str_to_academic_year(datestr)
+        self.assertEqual(academic_year, '2021-22')
+
+    def test_add_academic_year(self):
+        td = pd.DataFrame({
+            'Recorded Date': [
+                '9/16/2021 13:23',
+                '3/16/2023 13:23'
+            ]
+        })
+        expected = pd.DataFrame({
+            'Recorded Date': [
+                '9/16/2021 13:23',
+                '3/16/2023 13:23'
+            ],
+            'Academic Year': [
+                '2021-22',
+                '2022-23'
+            ]
+        })
+        td = merge.add_academic_year(td)
+        self.assertTrue(td.equals(expected), td)
     
 if __name__ == '__main__':
     unittest.main()
